@@ -15,31 +15,363 @@
   <script src="https://cdn.tailwindcss.com"></script>
   
   <!-- PWA Manifest -->
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="./manifest.json">
   
   <!-- Apple Touch Icon -->
-  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="https://via.placeholder.com/192/4F46E5/ffffff?text=BT">
   
   <!-- React & Babel -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
   <div id="root"></div>
   
-  <script type="text/babel" src="app.js"></script>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const BusinessTracker2026 = () => {
+      const [data, setData] = useState([]);
+      const [saveMessage, setSaveMessage] = useState('');
+      const [user, setUser] = useState(null);
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [isSignUp, setIsSignUp] = useState(false);
+
+      // Generate weeks for 2026
+      const generateWeeks = () => {
+        const weeks = [];
+        const startDate = new Date('2026-02-01');
+        let weekNumber = 1;
+        
+        for (let month = 1; month <= 12; month++) {
+          const monthName = new Date(2026, month - 1).toLocaleString('default', { month: 'long' });
+          const daysInMonth = new Date(2026, month, 0).getDate();
+          const firstDay = new Date(2026, month - 1, 1);
+          const lastDay = new Date(2026, month - 1, daysInMonth);
+          
+          let currentDate = new Date(firstDay);
+          let monthWeeks = [];
+          
+          while (currentDate <= lastDay) {
+            const weekStart = new Date(currentDate);
+            const weekEnd = new Date(currentDate);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            
+            if (weekEnd > lastDay) {
+              weekEnd.setTime(lastDay.getTime());
+            }
+            
+            monthWeeks.push({
+              weekNum: weekNumber++,
+              month: monthName,
+              dateRange: `${weekStart.getDate().toString().padStart(2, '0')}/${(weekStart.getMonth() + 1).toString().padStart(2, '0')} - ${weekEnd.getDate().toString().padStart(2, '0')}/${(weekEnd.getMonth() + 1).toString().padStart(2, '0')}`,
+              deposit: '',
+              out: ''
+            });
+            
+            currentDate.setDate(currentDate.getDate() + 7);
+          }
+          
+          weeks.push({ month: monthName, weeks: monthWeeks });
+        }
+        
+        return weeks;
+      };
+
+      useEffect(() => {
+        if (user) {
+          loadData();
+        }
+      }, [user]);
+
+      const loadData = async () => {
+        try {
+          const userId = btoa(user.email);
+          const result = await window.storage.get(`tracker_${userId}`, true);
+          if (result && result.value) {
+            setData(JSON.parse(result.value));
+          } else {
+            setData(generateWeeks());
+          }
+        } catch (error) {
+          setData(generateWeeks());
+        }
+      };
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (email && password) {
+          setUser({ email, password });
+          setSaveMessage('Logged in successfully!');
+          setTimeout(() => setSaveMessage(''), 3000);
+        }
+      };
+
+      const handleLogout = () => {
+        setUser(null);
+        setEmail('');
+        setPassword('');
+        setData([]);
+      };
+
+      const handleInputChange = (monthIndex, weekIndex, field, value) => {
+        const newData = [...data];
+        newData[monthIndex].weeks[weekIndex][field] = value;
+        setData(newData);
+        setSaveMessage('');
+      };
+
+      const calculateNet = (deposit, out) => {
+        const dep = parseFloat(deposit) || 0;
+        const exp = parseFloat(out) || 0;
+        return dep - exp;
+      };
+
+      const calculateMonthTotal = (monthWeeks) => {
+        return monthWeeks.reduce((sum, week) => {
+          return sum + calculateNet(week.deposit, week.out);
+        }, 0);
+      };
+
+      const calculateYearTotal = () => {
+        return data.reduce((sum, month) => {
+          return sum + calculateMonthTotal(month.weeks);
+        }, 0);
+      };
+
+      const handleSave = async () => {
+        try {
+          const userId = btoa(user.email);
+          await window.storage.set(`tracker_${userId}`, JSON.stringify(data), true);
+          setSaveMessage('Data saved to cloud successfully!');
+          setTimeout(() => setSaveMessage(''), 3000);
+        } catch (error) {
+          setSaveMessage('Save failed. Please try again.');
+          setTimeout(() => setSaveMessage(''), 3000);
+        }
+      };
+
+      const exportCSV = () => {
+        try {
+          let csv = 'Week,Month,Date Range,Deposit (R),Out (R),Net (R)\n';
+          
+          data.forEach(month => {
+            month.weeks.forEach(week => {
+              const net = calculateNet(week.deposit, week.out);
+              csv += `${week.weekNum},${week.month},"${week.dateRange}",${week.deposit || 0},${week.out || 0},${net.toFixed(2)}\n`;
+            });
+            
+            const monthTotal = calculateMonthTotal(month.weeks);
+            csv += `,,${month.month} Total,,,${monthTotal.toFixed(2)}\n`;
+          });
+          
+          const yearTotal = calculateYearTotal();
+          csv += `,,Year Total,,,${yearTotal.toFixed(2)}\n`;
+          
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'business_tracker_2026.csv';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          
+          setSaveMessage('CSV exported successfully!');
+          setTimeout(() => setSaveMessage(''), 3000);
+        } catch (error) {
+          setSaveMessage('Export failed. Please try again.');
+          setTimeout(() => setSaveMessage(''), 3000);
+        }
+      };
+
+      if (!user) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+              <div className="text-center mb-8">
+                <h1 className="text-3xl font-bold text-gray-800 mb-2">Business Tracker</h1>
+                <p className="text-gray-600">Sign in to access your financial data</p>
+              </div>
+              
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="your@email.com"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+                
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200"
+                >
+                  {isSignUp ? 'Sign Up' : 'Sign In'}
+                </button>
+              </form>
+              
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => setIsSignUp(!isSignUp)}
+                  className="text-blue-600 hover:text-blue-700 text-sm"
+                >
+                  {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                </button>
+              </div>
+              
+              {saveMessage && (
+                <div className="mt-4 p-3 bg-green-100 text-green-700 rounded-lg text-center text-sm">
+                  {saveMessage}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-4">
+          <div className="max-w-7xl mx-auto">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 mb-6">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-800">2026 Business Financial Tracker</h1>
+                  <p className="text-gray-600 mt-1">Logged in as: {user.email}</p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleSave}
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold transition duration-200 flex items-center gap-2"
+                  >
+                    Save to Cloud
+                  </button>
+                  <button
+                    onClick={exportCSV}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition duration-200 flex items-center gap-2"
+                  >
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-semibold transition duration-200"
+                  >
+                    Logout
+                  </button>
+                </div>
+              </div>
+              
+              {saveMessage && (
+                <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-center">
+                  {saveMessage}
+                </div>
+              )}
+              
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Week</th>
+                      <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Month</th>
+                      <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Date Range</th>
+                      <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Deposit (R)</th>
+                      <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Out (R)</th>
+                      <th className="border border-gray-300 px-4 py-3 text-left font-semibold">Net (R)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.map((month, monthIndex) => (
+                      <React.Fragment key={monthIndex}>
+                        {month.weeks.map((week, weekIndex) => (
+                          <tr key={weekIndex} className="hover:bg-gray-50">
+                            <td className="border border-gray-300 px-4 py-2">{week.weekNum}</td>
+                            <td className="border border-gray-300 px-4 py-2">{week.month}</td>
+                            <td className="border border-gray-300 px-4 py-2">{week.dateRange}</td>
+                            <td className="border border-gray-300 px-4 py-2">
+                              <input
+                                type="number"
+                                value={week.deposit}
+                                onChange={(e) => handleInputChange(monthIndex, weekIndex, 'deposit', e.target.value)}
+                                className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="0"
+                              />
+                            </td>
+                            <td className="border border-gray-300 px-4 py-2">
+                              <input
+                                type="number"
+                                value={week.out}
+                                onChange={(e) => handleInputChange(monthIndex, weekIndex, 'out', e.target.value)}
+                                className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="0"
+                              />
+                            </td>
+                            <td className={`border border-gray-300 px-4 py-2 font-semibold ${
+                              calculateNet(week.deposit, week.out) >= 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              R{calculateNet(week.deposit, week.out).toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="bg-blue-50 font-bold">
+                          <td colSpan="5" className="border border-gray-300 px-4 py-3 text-right">
+                            {month.month} Total:
+                          </td>
+                          <td className={`border border-gray-300 px-4 py-3 ${
+                            calculateMonthTotal(month.weeks) >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            R{calculateMonthTotal(month.weeks).toFixed(2)}
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    ))}
+                    <tr className="bg-indigo-100 font-bold text-lg">
+                      <td colSpan="5" className="border border-gray-300 px-4 py-4 text-right">
+                        2026 Year Total:
+                      </td>
+                      <td className={`border border-gray-300 px-4 py-4 ${
+                        calculateYearTotal() >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        R{calculateYearTotal().toFixed(2)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<BusinessTracker2026 />, document.getElementById('root'));
+  </script>
   
   <!-- Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js')
+        navigator.serviceWorker.register('./sw.js')
           .then(reg => console.log('Service Worker registered'))
-          .catch(err => console.log('Service Worker registration failed'));
+          .catch(err => console.log('Service Worker registration failed:', err));
       });
     }
   </script>
