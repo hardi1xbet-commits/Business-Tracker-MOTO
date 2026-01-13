@@ -42,7 +42,6 @@
       // Generate weeks for 2026
       const generateWeeks = () => {
         const weeks = [];
-        const startDate = new Date('2026-02-01');
         let weekNumber = 1;
         
         for (let month = 1; month <= 12; month++) {
@@ -80,22 +79,32 @@
         return weeks;
       };
 
+      // Load user from localStorage on mount
+      useEffect(() => {
+        const savedUser = localStorage.getItem('biztracker_user');
+        if (savedUser) {
+          setUser(JSON.parse(savedUser));
+        }
+      }, []);
+
+      // Load data when user changes
       useEffect(() => {
         if (user) {
           loadData();
         }
       }, [user]);
 
-      const loadData = async () => {
+      const loadData = () => {
         try {
           const userId = btoa(user.email);
-          const result = await window.storage.get(`tracker_${userId}`, true);
-          if (result && result.value) {
-            setData(JSON.parse(result.value));
+          const savedData = localStorage.getItem(`biztracker_data_${userId}`);
+          if (savedData) {
+            setData(JSON.parse(savedData));
           } else {
             setData(generateWeeks());
           }
         } catch (error) {
+          console.error('Load error:', error);
           setData(generateWeeks());
         }
       };
@@ -103,7 +112,9 @@
       const handleLogin = (e) => {
         e.preventDefault();
         if (email && password) {
-          setUser({ email, password });
+          const userData = { email, password };
+          setUser(userData);
+          localStorage.setItem('biztracker_user', JSON.stringify(userData));
           setSaveMessage('Logged in successfully!');
           setTimeout(() => setSaveMessage(''), 3000);
         }
@@ -114,6 +125,7 @@
         setEmail('');
         setPassword('');
         setData([]);
+        localStorage.removeItem('biztracker_user');
       };
 
       const handleInputChange = (monthIndex, weekIndex, field, value) => {
@@ -141,13 +153,14 @@
         }, 0);
       };
 
-      const handleSave = async () => {
+      const handleSave = () => {
         try {
           const userId = btoa(user.email);
-          await window.storage.set(`tracker_${userId}`, JSON.stringify(data), true);
-          setSaveMessage('Data saved to cloud successfully!');
+          localStorage.setItem(`biztracker_data_${userId}`, JSON.stringify(data));
+          setSaveMessage('Data saved successfully!');
           setTimeout(() => setSaveMessage(''), 3000);
         } catch (error) {
+          console.error('Save error:', error);
           setSaveMessage('Save failed. Please try again.');
           setTimeout(() => setSaveMessage(''), 3000);
         }
@@ -183,6 +196,7 @@
           setSaveMessage('CSV exported successfully!');
           setTimeout(() => setSaveMessage(''), 3000);
         } catch (error) {
+          console.error('Export error:', error);
           setSaveMessage('Export failed. Please try again.');
           setTimeout(() => setSaveMessage(''), 3000);
         }
@@ -253,21 +267,21 @@
         <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-4">
           <div className="max-w-7xl mx-auto">
             <div className="bg-white rounded-2xl shadow-2xl p-6 mb-6">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
                 <div>
                   <h1 className="text-3xl font-bold text-gray-800">2026 Business Financial Tracker</h1>
                   <p className="text-gray-600 mt-1">Logged in as: {user.email}</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   <button
                     onClick={handleSave}
-                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold transition duration-200 flex items-center gap-2"
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold transition duration-200"
                   >
-                    Save to Cloud
+                    Save
                   </button>
                   <button
                     onClick={exportCSV}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition duration-200 flex items-center gap-2"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition duration-200"
                   >
                     Export CSV
                   </button>
